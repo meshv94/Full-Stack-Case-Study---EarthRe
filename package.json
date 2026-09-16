@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "SLA Monitoring Dashboard with Vercel Serverless & MongoDB Atlas",
   "type": "module",
+  "workspaces": [
+    "client"
+  ],
   "scripts": {
     "dev": "npm --prefix client run dev",
     "dev:api": "node --watch api/localDevServer.js",
-    "build": "npm --prefix client run build",
+    "build": "npm --prefix client install && npm --prefix client run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
