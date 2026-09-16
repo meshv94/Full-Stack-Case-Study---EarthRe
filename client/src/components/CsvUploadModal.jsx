@@ -128,7 +128,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess }) {
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Upload Health Log CSV</h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Handed off to stateless serverless function & Firestore
+                Handed off to stateless serverless function & MongoDB Atlas
               </p>
             </div>
           </div>
@@ -160,7 +160,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess }) {
                   Processing & Persistence Complete!
                 </h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Cleaned data saved to Firestore and SLA computed.
+                  Cleaned data saved to MongoDB Atlas and SLA computed.
                 </p>
               </div>
             </div>
@@ -275,7 +275,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess }) {
                 style={{ width: '100%', padding: '12px' }}
               >
                 <Upload size={16} />
-                <span>{uploading ? 'Uploading & Processing in Cloud Function...' : `Upload & Process ${selectedFile.name}`}</span>
+                <span>{uploading ? 'Uploading & Processing in Serverless Function...' : `Upload & Process ${selectedFile.name}`}</span>
               </button>
             )}
           </div>

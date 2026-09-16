@@ -21,7 +21,7 @@ export default function Header({ summary, onOpenUpload, isLoading }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>SLA Monitor</h1>
-            <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>Cloud Functions • Firestore</span>
+            <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>Vercel Serverless • MongoDB Atlas</span>
           </div>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             Automated Health Log Pipeline & SLA Compliance Verification

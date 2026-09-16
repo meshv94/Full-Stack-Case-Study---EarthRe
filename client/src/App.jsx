@@ -25,7 +25,7 @@ export default function App() {
     to: ''
   });
 
-  // Check if any previous active upload exists in Firestore on initial load
+  // Check if any previous active upload exists in MongoDB on initial load
   useEffect(() => {
     async function initDashboard() {
       setIsLoading(true);
@@ -143,7 +143,7 @@ export default function App() {
               No Monitoring Data Loaded
             </h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Upload a health-check monitoring CSV file. The file will be sent to the stateless cloud function to clean, validate, persist in Firestore, and compute contractual 99.9% SLA availability.
+              Upload a health-check monitoring CSV file. The file will be sent to the stateless serverless function to clean, validate, persist in MongoDB Atlas, and compute contractual 99.9% SLA availability.
             </p>
           </div>
 
