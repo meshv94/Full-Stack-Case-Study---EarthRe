@@ -1,17 +1,15 @@
 import { processCsvLocally } from './localEngine';
-import {
-  saveToFirestore,
-  loadStatsFromFirestore,
-  queryFirestoreLogs
-} from './firebase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-// In-memory cache for state management
+// In-memory cache for state management and instant local responsiveness
 let currentActiveData = null;
 
+/**
+ * Uploads CSV to the serverless backend function
+ */
 export async function uploadCsvFile(csvContent, filename) {
-  // 1. Try uploading to Firebase Cloud Function if deployed
+  // 1. Send to Vercel Serverless Function (/api/upload)
   try {
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
@@ -22,26 +20,15 @@ export async function uploadCsvFile(csvContent, filename) {
     if (response.ok) {
       const data = await response.json();
       currentActiveData = data;
-      return { source: 'cloud_function', data };
+      return { source: 'serverless_api', data };
     }
-  } catch {
-    // Cloud Function endpoint offline or in local dev
+  } catch (err) {
+    console.warn('API fetch warning, using local processing fallback:', err);
   }
 
-  // 2. Process data and persist directly to Cloud Firestore
+  // 2. Local fallback if API is not running locally
   const localResult = processCsvLocally(csvContent, filename);
   const uploadId = `upload_${Date.now()}`;
-
-  try {
-    await saveToFirestore(
-      uploadId,
-      localResult.summary,
-      localResult.stats,
-      localResult.checks
-    );
-  } catch (firestoreErr) {
-    console.warn('Direct Firestore save failed, using local memory state:', firestoreErr);
-  }
 
   currentActiveData = {
     uploadId,
@@ -50,11 +37,13 @@ export async function uploadCsvFile(csvContent, filename) {
     checks: localResult.checks
   };
 
-  return { source: 'firestore', data: currentActiveData };
+  return { source: 'local_engine', data: currentActiveData };
 }
 
+/**
+ * Fetches current active SLA statistics from the serverless backend
+ */
 export async function fetchDashboardStats(uploadId = null) {
-  // Try remote API first
   try {
     const url = uploadId ? `${API_BASE_URL}/stats?uploadId=${uploadId}` : `${API_BASE_URL}/stats`;
     const res = await fetch(url);
@@ -62,21 +51,10 @@ export async function fetchDashboardStats(uploadId = null) {
       const json = await res.json();
       if (json.hasData) return json;
     }
-  } catch {
-    // remote fetch failed
+  } catch (err) {
+    // API offline
   }
 
-  // Try direct Firestore read
-  try {
-    const firestoreStats = await loadStatsFromFirestore(uploadId);
-    if (firestoreStats && firestoreStats.hasData) {
-      return firestoreStats;
-    }
-  } catch {
-    // Firestore read failed
-  }
-
-  // In-memory fallback
   if (currentActiveData) {
     return {
       hasData: true,
@@ -89,8 +67,30 @@ export async function fetchDashboardStats(uploadId = null) {
   return { hasData: false };
 }
 
+/**
+ * Queries paginated monitoring logs with filters from the serverless backend
+ */
 export async function fetchLogs({ serviceId, from, to, status, page = 1, pageSize = 50 }) {
-  // 1. If in-memory checks exist
+  // 1. Try remote Serverless API
+  try {
+    const params = new URLSearchParams({
+      serviceId: serviceId || 'all',
+      status: status || 'all',
+      page: String(page),
+      pageSize: String(pageSize),
+      ...(from && { from }),
+      ...(to && { to })
+    });
+    const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.records) return json;
+    }
+  } catch (err) {
+    // remote query offline
+  }
+
+  // 2. If in-memory checks exist
   if (currentActiveData && currentActiveData.checks) {
     let filtered = currentActiveData.checks;
 
@@ -129,23 +129,6 @@ export async function fetchLogs({ serviceId, from, to, status, page = 1, pageSiz
       totalPages,
       hasMore: page < totalPages
     };
-  }
-
-  // 2. Try Firestore direct query
-  try {
-    const firestoreLogs = await queryFirestoreLogs({
-      serviceId,
-      from,
-      to,
-      status,
-      page,
-      pageSize
-    });
-    if (firestoreLogs.records && firestoreLogs.records.length > 0) {
-      return firestoreLogs;
-    }
-  } catch {
-    // Firestore query failed
   }
 
   return { records: [], totalCount: 0, page: 1, totalPages: 1 };

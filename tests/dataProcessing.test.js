@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-const { parseAndNormalizeTimestamp } = require('../functions/src/utils/timestamp');
-const { parseAndNormalizeLatency } = require('../functions/src/utils/latency');
-const { cleanAndNormalizeData, isValidHttpStatusCode } = require('../functions/src/services/dataCleaner');
-const { calculatePercentile, calculateSlaStats, detectIncidents } = require('../functions/src/services/slaCalculator');
+import { parseAndNormalizeTimestamp } from '../api/utils/timestamp.js';
+import { parseAndNormalizeLatency } from '../api/utils/latency.js';
+import { cleanAndNormalizeData, isValidHttpStatusCode } from '../api/services/dataCleaner.js';
+import { calculatePercentile, calculateSlaStats, detectIncidents } from '../api/services/slaCalculator.js';
 
 describe('Timestamp Normalization', () => {
   it('should correctly parse and normalize ISO UTC strings', () => {
@@ -15,7 +15,6 @@ describe('Timestamp Normalization', () => {
   it('should correctly parse ISO strings with timezone offset (+05:30) to UTC', () => {
     const result = parseAndNormalizeTimestamp('2025-06-01T19:00:00+05:30');
     expect(result.isValid).toBe(true);
-    // 19:00 - 5:30 = 13:30 UTC
     expect(result.isoUTC).toBe('2025-06-01T13:30:00.000Z');
   });
 
@@ -81,15 +80,10 @@ describe('Data Cleaning & Deduplication Engine', () => {
   it('should filter exact duplicates, invalid status codes, and negative latencies', () => {
     const rawData = [
       { service_id: 'svc-auth', service_name: 'auth-api', timestamp: '2025-05-13T12:00:00Z', status_code: '200', latency: '150', latency_unit: 'ms', agent: 'agent-1', region: 'ap-south-1' },
-      // Exact duplicate of above
       { service_id: 'svc-auth', service_name: 'auth-api', timestamp: '2025-05-13T12:00:00Z', status_code: '200', latency: '150', latency_unit: 'ms', agent: 'agent-1', region: 'ap-south-1' },
-      // Invalid status 999
       { service_id: 'svc-auth', service_name: 'auth-api', timestamp: '2025-05-13T12:15:00Z', status_code: '999', latency: '160', latency_unit: 'ms', agent: 'agent-1', region: 'ap-south-1' },
-      // Negative latency
       { service_id: 'svc-auth', service_name: 'auth-api', timestamp: '2025-05-13T12:30:00Z', status_code: '200', latency: '-200', latency_unit: 'ms', agent: 'agent-1', region: 'ap-south-1' },
-      // Unit in seconds
       { service_id: 'svc-search', service_name: 'search-api', timestamp: '1746938700', status_code: '200', latency: '0.55', latency_unit: 's', agent: 'agent-2', region: 'ap-south-1' },
-      // Empty latency
       { service_id: 'svc-notify', service_name: 'notify-worker', timestamp: '2025-05-13T12:45:00Z', status_code: '200', latency: '', latency_unit: 'ms', agent: 'agent-1', region: 'ap-south-1' }
     ];
 
@@ -105,7 +99,6 @@ describe('Data Cleaning & Deduplication Engine', () => {
     expect(uploadSummary.rowsAccepted).toBe(3);
     expect(cleanedChecks.length).toBe(3);
 
-    // Verify converted latency
     const searchCheck = cleanedChecks.find(c => c.serviceId === 'svc-search');
     expect(searchCheck.latencyMs).toBe(550);
   });

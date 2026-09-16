@@ -1,6 +1,6 @@
-# SLA Monitoring Dashboard & Automated Reliability Engine
+# SLA Monitoring Dashboard — Vercel + MongoDB Atlas
 
-A production-grade SLA Monitoring Dashboard and automated data-cleaning pipeline built to turn raw, messy multi-agent cloud health logs into dependable SLA compliance numbers and actionable operational insights.
+A production-grade SLA Monitoring Dashboard and automated data-cleaning pipeline built with **React + Vite**, **Vercel Stateless Serverless Functions**, and **MongoDB Atlas** to turn raw, messy multi-agent cloud health logs into trustworthy SLA compliance metrics and actionable operational insights.
 
 ---
 
@@ -9,53 +9,52 @@ A production-grade SLA Monitoring Dashboard and automated data-cleaning pipeline
 ```mermaid
 flowchart LR
     subgraph Frontend [Client Layer]
-        UI[Single-Screen React + Vite App\nFirebase Hosting]
+        UI[Single-Screen React + Vite Dashboard\nHosted on Vercel CDN]
     end
 
     subgraph Serverless [Stateless Compute Layer]
-        CF[Stateless Cloud Function\nFirebase / GCP Cloud Functions\n(Node.js)]
-        Parser[CSV Streaming Parser]
+        API[Vercel Serverless Function\n/api/upload on AWS Lambda\n(Node.js)]
+        Parser[CSV Parser]
         Cleaner[Data Cleaner & Normalizer]
         SLACalc[SLA & Stats Engine]
     end
 
     subgraph Persistence [Database Layer]
-        Firestore[(Cloud Firestore)]
-        UploadsCol[(uploads collection\nAggregates & Summary)]
+        Mongo[(MongoDB Atlas M0 Database\nFree Tier Cluster)]
+        UploadsCol[(uploads collection\nAggregates & SLA Stats)]
         ChecksCol[(monitoringChecks collection\nIndexed Checks)]
     end
 
-    UI -->|HTTPS POST /upload| CF
-    CF --> Parser --> Cleaner --> SLACalc
-    SLACalc -->|Batch Writes <= 450| Firestore
-    Firestore --> UploadsCol
-    Firestore --> ChecksCol
-    UI -->|GET /stats & GET /logs| CF
-    UI -.->|Direct Read| Firestore
+    UI -->|POST /api/upload| API
+    API --> Parser --> Cleaner --> SLACalc
+    SLACalc -->|insertMany batch| Mongo
+    Mongo --> UploadsCol
+    Mongo --> ChecksCol
+    UI -->|GET /api/stats & GET /api/logs| API
 ```
 
 ### Architectural Decisions & Rationale
 
-1. **Upload UI & Dashboard (React.js + Vite hosted on Firebase Hosting):**
-   - Single-screen dashboard delivering zero-latency responsive interactions.
-   - Built with Vanilla CSS design tokens (Deep Slate Obsidian theme, glassmorphic cards, micro-animations) for high aesthetic polish without Tailwind overhead.
-   - Hosted globally on Firebase CDN Hosting for rapid static delivery.
+1. **Upload UI & Dashboard (React + Vite on Vercel):**
+   - Single-screen dashboard delivering fast, responsive interactions.
+   - Built with Vanilla CSS design tokens (Deep Slate Obsidian theme, glassmorphic cards, micro-animations) for high aesthetic polish.
+   - Hosted globally on Vercel's edge network for rapid delivery.
 
-2. **Stateless Processing Layer (Firebase Cloud Functions / Node.js):**
-   - **True Stateless Cloud Execution:** All CSV parsing, row-level validation, anomaly rejection, unit normalization, deduplication, and SLA aggregation run strictly inside a deployed stateless serverless function.
-   - Computes summary metadata and percentiles in memory before persisting, reducing redundant database reads.
+2. **Stateless Processing Layer (Vercel Serverless Functions):**
+   - **True Stateless Cloud Execution:** All CSV parsing, row-level validation, anomaly rejection, unit normalization, deduplication, and SLA aggregation run strictly inside a deployed stateless serverless function on AWS Lambda (`/api/upload`).
+   - Returns full processing audit numbers and SLA statistics immediately upon upload.
 
-3. **Persistence Layer (Cloud Firestore):**
-   - Structured into two collections:
-     - `uploads/{uploadId}`: Stores aggregate SLA metrics, availability %, P95 latency, date ranges, and complete rejection/cleaning audit numbers.
-     - `monitoringChecks/{checkDocId}`: Stores normalized checks indexed by `(uploadId, timestamp desc, serviceId, isDown)` for fast date-range filtering and pagination.
-   - Batch writes in chunks of 450 documents to stay comfortably under Firestore's 500-write limit and 20k free-tier daily quotas.
+3. **Persistence Layer (MongoDB Atlas):**
+   - Stores datasets across two collections:
+     - `uploads`: Stores dataset filename, upload timestamp, cleaning audit numbers, and precomputed SLA summary JSON.
+     - `monitoringChecks`: Stores normalized checks with compound indexes `{ uploadId: 1, epochMs: -1, serviceId: 1 }` for instant date-range filtering and pagination.
+   - Utilizes `insertMany(batch, { ordered: false })` to insert 15,000+ checks in milliseconds.
 
 ---
 
 ## 2. Data Findings: Quality Issues & Handling Strategy
 
-Through automated data auditing across all provided datasets (`9d`, `12d`, `14d`, `21d`, `30d`), we identified and resolved the following data flaws:
+Through automated data auditing across all provided datasets (`9d`, `12d`, `14d`, `21d`, `30d`), we discovered and resolved the following data quality issues:
 
 | Flaw Category | Specific Discovery in Logs | Handling & Pipeline Resolution |
 | :--- | :--- | :--- |
@@ -95,53 +94,58 @@ Through automated data auditing across all provided datasets (`9d`, `12d`, `14d`
 
 ### Prerequisites
 - Node.js >= 18.x
-- npm >= 9.x
-- Firebase CLI (`npm install -g firebase-tools`)
+- MongoDB Atlas free cluster connection string
 
-### Local Setup & Running
+### Setup & Local Running
 ```bash
 # 1. Clone repository
 git clone <your-repo-url>
 cd SLA_Monitoring_Dashboard
 
-# 2. Install dependencies (root, client, and functions)
+# 2. Install dependencies
 npm install
 npm --prefix client install
-npm --prefix functions install
 
-# 3. Run automated test suites (17 tests across all 5 datasets)
+# 3. Create .env file with your MongoDB connection string
+cp .env.example .env
+# Edit .env and set MONGODB_URI=mongodb+srv://...
+
+# 4. Run automated test suites (17 tests across all 5 datasets)
 npm test
 
-# 4. Start frontend development server
+# 5. Start local backend API server (runs on port 5001)
+npm run dev:api
+
+# 6. Start frontend client (in a separate terminal)
 npm run dev
 ```
 
-The frontend will start at `http://localhost:5173`. It includes built-in quick loaders for all 5 sample datasets (`9d`, `12d`, `14d`, `21d`, `30d`) and custom CSV upload support.
+Open `http://localhost:5173` to access the dashboard.
 
-### Deploying to Firebase
+### Deploying to Vercel (100% Free)
 ```bash
-# 1. Login to Firebase
-firebase login
+# 1. Install Vercel CLI (optional) or push to GitHub
+npm install -g vercel
+vercel
 
-# 2. Link your Firebase project (Blaze plan required for Cloud Functions)
-firebase use <your-firebase-project-id>
+# 2. Add MONGODB_URI to Vercel Environment Variables:
+# In Vercel Project Settings -> Environment Variables:
+# Key: MONGODB_URI
+# Value: mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/sla_monitoring?retryWrites=true&w=majority
 
-# 3. Build frontend bundle
-npm run build:client
-
-# 4. Deploy all resources (Hosting, Cloud Functions, Firestore Rules)
-firebase deploy
+# 3. Deploy production
+vercel --prod
 ```
 
 ---
 
 ## 5. What We'd Do Differently With More Time
 
-1. **Streaming Multi-GB Uploads via Cloud Storage Triggers:**
-   - For CSVs exceeding hundreds of megabytes, accept direct uploads to a signed Cloud Storage bucket URL and trigger an asynchronous background Cloud Function with Node.js streams.
+1. **Streaming Multi-GB Uploads via S3 / Cloud Storage:**
+   - For CSVs exceeding hundreds of megabytes, accept direct uploads to signed S3/R2 storage URLs and stream parse directly into MongoDB.
 2. **Automated Incident Root-Cause Correlation:**
    - Group consecutive 5xx intervals into automated Incident Reports with estimated dollar-value SLA penalty calculations.
 3. **Real-time Webhook / Slack Alerts:**
    - Trigger alert dispatches to PagerDuty or Slack whenever an upload causes a monthly SLA availability breach.
-4. **Time-Series Latency & Error Distribution Charts:**
+4. **Time-Series Latency & Error Heatmaps:**
    - Add interactive canvas heatmaps showing latency spikes and agent-region latency deltas over time.
