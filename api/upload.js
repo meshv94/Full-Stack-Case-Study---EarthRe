@@ -1,4 +1,5 @@
 import { getDatabase } from './lib/mongodb.js';
+import { memoryStore } from './lib/store.js';
 import { parseCsvContent } from './services/csvParser.js';
 import { cleanAndNormalizeData } from './services/dataCleaner.js';
 import { calculateSlaStats } from './services/slaCalculator.js';
@@ -12,7 +13,6 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -30,7 +30,6 @@ export default async function handler(req, res) {
     let csvContent = '';
     let filename = 'monitoring_checks.csv';
 
-    // Parse body (JSON or text)
     if (typeof req.body === 'object' && req.body.csvContent) {
       csvContent = req.body.csvContent;
       filename = req.body.filename || filename;
@@ -54,59 +53,64 @@ export default async function handler(req, res) {
 
     // 3. Compute SLA Statistics
     const slaStats = calculateSlaStats(cleanedChecks, 99.9);
-
     const uploadId = `upload_${Date.now()}`;
 
-    // 4. Persist into MongoDB Atlas
+    // 4. Save to Memory Store
+    memoryStore.activeUploadId = uploadId;
+    memoryStore.uploads.set(uploadId, {
+      uploadId,
+      summary: uploadSummary,
+      stats: slaStats
+    });
+    memoryStore.checks.set(uploadId, cleanedChecks);
+
+    // 5. If MongoDB Atlas is connected, persist records
     try {
       const db = await getDatabase();
-      const uploadsCollection = db.collection('uploads');
-      const checksCollection = db.collection('monitoringChecks');
-      const appStateCollection = db.collection('appState');
+      if (db) {
+        const uploadsCollection = db.collection('uploads');
+        const checksCollection = db.collection('monitoringChecks');
+        const appStateCollection = db.collection('appState');
 
-      // Ensure indexes for fast query performance
-      await checksCollection.createIndex({ uploadId: 1, epochMs: -1, serviceId: 1 });
-      await uploadsCollection.createIndex({ uploadedAt: -1 });
+        await checksCollection.createIndex({ uploadId: 1, epochMs: -1, serviceId: 1 });
+        await uploadsCollection.createIndex({ uploadedAt: -1 });
 
-      // Save upload summary
-      await uploadsCollection.insertOne({
-        uploadId,
-        ...uploadSummary,
-        stats: slaStats,
-        createdAt: new Date()
-      });
+        await uploadsCollection.insertOne({
+          uploadId,
+          ...uploadSummary,
+          stats: slaStats,
+          createdAt: new Date()
+        });
 
-      // Update active upload pointer
-      await appStateCollection.updateOne(
-        { _id: 'current' },
-        { $set: { activeUploadId: uploadId, updatedAt: new Date() } },
-        { upsert: true }
-      );
+        await appStateCollection.updateOne(
+          { _id: 'current' },
+          { $set: { activeUploadId: uploadId, updatedAt: new Date() } },
+          { upsert: true }
+        );
 
-      // Batch insert check documents
-      const docsToInsert = cleanedChecks.map((check, idx) => ({
-        uploadId,
-        serviceId: check.serviceId,
-        serviceName: check.serviceName,
-        timestamp: check.timestamp,
-        epochMs: check.epochMs,
-        statusCode: check.statusCode,
-        availability: check.availability,
-        isDown: check.isDown,
-        latencyMs: check.latencyMs,
-        agent: check.agent,
-        region: check.region,
-        createdAt: new Date()
-      }));
+        const docsToInsert = cleanedChecks.map((check) => ({
+          uploadId,
+          serviceId: check.serviceId,
+          serviceName: check.serviceName,
+          timestamp: check.timestamp,
+          epochMs: check.epochMs,
+          statusCode: check.statusCode,
+          availability: check.availability,
+          isDown: check.isDown,
+          latencyMs: check.latencyMs,
+          agent: check.agent,
+          region: check.region,
+          createdAt: new Date()
+        }));
 
-      // In MongoDB, insertMany handles 15k rows in ~100ms
-      const BATCH_SIZE = 1000;
-      for (let i = 0; i < docsToInsert.length; i += BATCH_SIZE) {
-        const batch = docsToInsert.slice(i, i + BATCH_SIZE);
-        await checksCollection.insertMany(batch, { ordered: false });
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < docsToInsert.length; i += BATCH_SIZE) {
+          const batch = docsToInsert.slice(i, i + BATCH_SIZE);
+          await checksCollection.insertMany(batch, { ordered: false });
+        }
       }
     } catch (dbErr) {
-      console.warn('MongoDB Atlas persistence warning:', dbErr.message);
+      console.warn('MongoDB Atlas persistence note:', dbErr.message);
     }
 
     return res.status(200).json({

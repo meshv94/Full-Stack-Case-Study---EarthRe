@@ -1,4 +1,5 @@
 import { getDatabase } from './lib/mongodb.js';
+import { memoryStore } from './lib/store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -18,50 +19,67 @@ export default async function handler(req, res) {
     const db = await getDatabase();
     let targetUploadId = req.query.uploadId;
 
-    if (!targetUploadId) {
-      const appState = await db.collection('appState').findOne({ _id: 'current' });
-      if (appState && appState.activeUploadId) {
-        targetUploadId = appState.activeUploadId;
-      } else {
-        const latestUpload = await db.collection('uploads').find().sort({ uploadedAt: -1 }).limit(1).toArray();
-        if (latestUpload && latestUpload.length > 0) {
-          targetUploadId = latestUpload[0].uploadId;
+    if (db) {
+      if (!targetUploadId) {
+        const appState = await db.collection('appState').findOne({ _id: 'current' });
+        if (appState && appState.activeUploadId) {
+          targetUploadId = appState.activeUploadId;
+        } else {
+          const latestUpload = await db.collection('uploads').find().sort({ uploadedAt: -1 }).limit(1).toArray();
+          if (latestUpload && latestUpload.length > 0) {
+            targetUploadId = latestUpload[0].uploadId;
+          }
+        }
+      }
+
+      if (targetUploadId) {
+        const uploadDoc = await db.collection('uploads').findOne({ uploadId: targetUploadId });
+        if (uploadDoc) {
+          return res.status(200).json({
+            hasData: true,
+            uploadId: uploadDoc.uploadId,
+            summary: {
+              filename: uploadDoc.filename,
+              uploadedAt: uploadDoc.uploadedAt,
+              rowsReceived: uploadDoc.rowsReceived,
+              rowsAccepted: uploadDoc.rowsAccepted,
+              rowsRejected: uploadDoc.rowsRejected,
+              duplicateRows: uploadDoc.duplicateRows,
+              invalidStatusRows: uploadDoc.invalidStatusRows,
+              negativeLatencyRows: uploadDoc.negativeLatencyRows,
+              missingLatencyRows: uploadDoc.missingLatencyRows,
+              normalizedUnitRows: uploadDoc.normalizedUnitRows,
+              normalizedEpochRows: uploadDoc.normalizedEpochRows,
+              dateFrom: uploadDoc.dateFrom,
+              dateTo: uploadDoc.dateTo,
+              processingStatus: uploadDoc.processingStatus
+            },
+            stats: uploadDoc.stats
+          });
         }
       }
     }
 
-    if (!targetUploadId) {
-      return res.status(200).json({ hasData: false, message: 'No active upload found.' });
+    // Fallback: Check local memory store
+    const memUploadId = targetUploadId || memoryStore.activeUploadId;
+    if (memUploadId && memoryStore.uploads.has(memUploadId)) {
+      const memDoc = memoryStore.uploads.get(memUploadId);
+      return res.status(200).json({
+        hasData: true,
+        uploadId: memDoc.uploadId,
+        summary: memDoc.summary,
+        stats: memDoc.stats
+      });
     }
 
-    const uploadDoc = await db.collection('uploads').findOne({ uploadId: targetUploadId });
-    if (!uploadDoc) {
-      return res.status(200).json({ hasData: false, message: 'Upload not found.' });
-    }
-
+    // No active upload yet
     return res.status(200).json({
-      hasData: true,
-      uploadId: uploadDoc.uploadId,
-      summary: {
-        filename: uploadDoc.filename,
-        uploadedAt: uploadDoc.uploadedAt,
-        rowsReceived: uploadDoc.rowsReceived,
-        rowsAccepted: uploadDoc.rowsAccepted,
-        rowsRejected: uploadDoc.rowsRejected,
-        duplicateRows: uploadDoc.duplicateRows,
-        invalidStatusRows: uploadDoc.invalidStatusRows,
-        negativeLatencyRows: uploadDoc.negativeLatencyRows,
-        missingLatencyRows: uploadDoc.missingLatencyRows,
-        normalizedUnitRows: uploadDoc.normalizedUnitRows,
-        normalizedEpochRows: uploadDoc.normalizedEpochRows,
-        dateFrom: uploadDoc.dateFrom,
-        dateTo: uploadDoc.dateTo,
-        processingStatus: uploadDoc.processingStatus
-      },
-      stats: uploadDoc.stats
+      hasData: false,
+      message: 'No active upload found. Please upload a CSV file.'
     });
   } catch (err) {
     console.error('Error in /api/stats:', err);
-    return res.status(500).json({ error: 'Failed to fetch stats', details: err.message });
+    // Even if an unexpected error occurs, return 200 with hasData: false
+    return res.status(200).json({ hasData: false, message: err.message });
   }
 }

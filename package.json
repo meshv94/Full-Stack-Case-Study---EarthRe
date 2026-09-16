@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm --prefix client run dev",
-    "dev:api": "node api/localDevServer.js",
+    "dev:api": "node --watch api/localDevServer.js",
     "build": "npm --prefix client run build",
     "test": "vitest run",
     "test:watch": "vitest"
