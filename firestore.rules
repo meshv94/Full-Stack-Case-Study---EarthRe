@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Open access for SLA Monitoring case study demo (no auth required per assignment spec)
+    match /uploads/{uploadId} {
+      allow read, write: if true;
+    }
+    match /monitoringChecks/{checkId} {
+      allow read, write: if true;
+    }
+    match /appState/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

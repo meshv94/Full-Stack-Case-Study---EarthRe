@@ -1,0 +1,14 @@
+{
+  "name": "sla-monitoring-case-study",
+  "version": "1.0.0",
+  "description": "SLA Monitoring Dashboard Case Study with Firebase & React",
+  "scripts": {
+    "dev": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
+}
