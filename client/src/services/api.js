@@ -1,12 +1,17 @@
 import { processCsvLocally } from './localEngine';
+import {
+  saveToFirestore,
+  loadStatsFromFirestore,
+  queryFirestoreLogs
+} from './firebase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-// In-memory cache for state management and offline capability
+// In-memory cache for state management
 let currentActiveData = null;
 
 export async function uploadCsvFile(csvContent, filename) {
-  // First, try uploading to Firebase Cloud Function if available
+  // 1. Try uploading to Firebase Cloud Function if deployed
   try {
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
@@ -20,22 +25,36 @@ export async function uploadCsvFile(csvContent, filename) {
       return { source: 'cloud_function', data };
     }
   } catch {
-    console.warn('Backend Cloud Function unreachable, falling back to browser processing engine.');
+    // Cloud Function endpoint offline or in local dev
   }
 
-  // Fallback to in-browser deterministic processing engine
+  // 2. Process data and persist directly to Cloud Firestore
   const localResult = processCsvLocally(csvContent, filename);
+  const uploadId = `upload_${Date.now()}`;
+
+  try {
+    await saveToFirestore(
+      uploadId,
+      localResult.summary,
+      localResult.stats,
+      localResult.checks
+    );
+  } catch (firestoreErr) {
+    console.warn('Direct Firestore save failed, using local memory state:', firestoreErr);
+  }
+
   currentActiveData = {
-    uploadId: `local_${Date.now()}`,
+    uploadId,
     summary: localResult.summary,
     stats: localResult.stats,
     checks: localResult.checks
   };
 
-  return { source: 'local_engine', data: currentActiveData };
+  return { source: 'firestore', data: currentActiveData };
 }
 
-export async function fetchDashboardStats(uploadId) {
+export async function fetchDashboardStats(uploadId = null) {
+  // Try remote API first
   try {
     const url = uploadId ? `${API_BASE_URL}/stats?uploadId=${uploadId}` : `${API_BASE_URL}/stats`;
     const res = await fetch(url);
@@ -44,9 +63,20 @@ export async function fetchDashboardStats(uploadId) {
       if (json.hasData) return json;
     }
   } catch {
-    // Cloud fetch failed
+    // remote fetch failed
   }
 
+  // Try direct Firestore read
+  try {
+    const firestoreStats = await loadStatsFromFirestore(uploadId);
+    if (firestoreStats && firestoreStats.hasData) {
+      return firestoreStats;
+    }
+  } catch {
+    // Firestore read failed
+  }
+
+  // In-memory fallback
   if (currentActiveData) {
     return {
       hasData: true,
@@ -60,7 +90,7 @@ export async function fetchDashboardStats(uploadId) {
 }
 
 export async function fetchLogs({ serviceId, from, to, status, page = 1, pageSize = 50 }) {
-  // If we have local checks in memory
+  // 1. If in-memory checks exist
   if (currentActiveData && currentActiveData.checks) {
     let filtered = currentActiveData.checks;
 
@@ -84,7 +114,6 @@ export async function fetchLogs({ serviceId, from, to, status, page = 1, pageSiz
       filtered = filtered.filter(c => new Date(c.timestamp) <= toDate);
     }
 
-    // Sort by timestamp desc
     filtered.sort((a, b) => b.epochMs - a.epochMs);
 
     const totalCount = filtered.length;
@@ -102,29 +131,22 @@ export async function fetchLogs({ serviceId, from, to, status, page = 1, pageSiz
     };
   }
 
-  // Fallback to remote API
+  // 2. Try Firestore direct query
   try {
-    const params = new URLSearchParams({
-      serviceId: serviceId || 'all',
-      status: status || 'all',
-      pageSize: String(pageSize),
-      ...(from && { from }),
-      ...(to && { to })
+    const firestoreLogs = await queryFirestoreLogs({
+      serviceId,
+      from,
+      to,
+      status,
+      page,
+      pageSize
     });
-    const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
-    if (res.ok) return await res.json();
+    if (firestoreLogs.records && firestoreLogs.records.length > 0) {
+      return firestoreLogs;
+    }
   } catch {
-    // remote failed
+    // Firestore query failed
   }
 
   return { records: [], totalCount: 0, page: 1, totalPages: 1 };
-}
-
-export async function loadPresetDataset(filename) {
-  const res = await fetch(`/datasets/${filename}`);
-  if (!res.ok) {
-    throw new Error(`Failed to load preset dataset: ${filename}`);
-  }
-  const text = await res.text();
-  return uploadCsvFile(text, filename);
 }

@@ -5,21 +5,11 @@ import {
   FileText,
   AlertCircle,
   CheckCircle2,
-  Sparkles,
-  Database,
   ArrowRight
 } from 'lucide-react';
 import { formatNumber } from '../utils/formatters';
 
-const PRESET_FILES = [
-  { id: 'monitoring_checks_9d_seed101.csv', label: '9-Day Dataset', seed: 'seed101', days: '9 days' },
-  { id: 'monitoring_checks_12d_seed505.csv', label: '12-Day Dataset', seed: 'seed505', days: '12 days' },
-  { id: 'monitoring_checks_14d_seed202.csv', label: '14-Day Dataset', seed: 'seed202', days: '14 days' },
-  { id: 'monitoring_checks_21d_seed303.csv', label: '21-Day Dataset', seed: 'seed303', days: '21 days' },
-  { id: 'monitoring_checks_30d_seed404.csv', label: '30-Day Dataset', seed: 'seed404', days: '30 days' }
-];
-
-export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSelectPreset }) {
+export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess }) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -92,19 +82,6 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
     }
   };
 
-  const handlePresetSelect = async (filename) => {
-    setUploading(true);
-    setErrorMessage(null);
-    try {
-      const res = await onSelectPreset(filename);
-      setUploadResult(res);
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to load sample dataset.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handleClose = () => {
     setSelectedFile(null);
     setUploadResult(null);
@@ -126,7 +103,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
     }} className="animate-fade-in">
       <div className="glass-card" style={{
         width: '100%',
-        maxWidth: '560px',
+        maxWidth: '520px',
         padding: '28px',
         background: 'var(--bg-surface)',
         boxShadow: 'var(--shadow-lg)',
@@ -151,7 +128,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Upload Health Log CSV</h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Process multi-agent logs through the stateless serverless pipeline
+                Handed off to stateless serverless function & Firestore
               </p>
             </div>
           </div>
@@ -183,7 +160,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
                   Processing & Persistence Complete!
                 </h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Dataset cleaned, validated, deduplicated, and SLA calculated.
+                  Cleaned data saved to Firestore and SLA computed.
                 </p>
               </div>
             </div>
@@ -210,7 +187,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
               <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px', borderRadius: 'var(--radius-sm)' }}>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Purged Anomaly</span>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--status-breached)' }}>
-                  {formatNumber(uploadResult.summary?.invalidStatusRows + uploadResult.summary?.negativeLatencyRows)}
+                  {formatNumber((uploadResult.summary?.invalidStatusRows || 0) + (uploadResult.summary?.negativeLatencyRows || 0))}
                 </div>
               </div>
             </div>
@@ -238,7 +215,7 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
                 border: `2px dashed ${dragActive ? 'var(--color-primary)' : 'var(--border-medium)'}`,
                 background: dragActive ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.02)',
                 borderRadius: 'var(--radius-md)',
-                padding: '32px 20px',
+                padding: '36px 20px',
                 textAlign: 'center',
                 cursor: 'pointer',
                 transition: 'all var(--transition-fast)'
@@ -252,20 +229,20 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
                 onChange={handleFileInput}
               />
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                 <div style={{
                   padding: '12px',
                   borderRadius: '50%',
                   background: 'rgba(255, 255, 255, 0.05)'
                 }}>
-                  <Upload size={24} color="var(--text-muted)" />
+                  <Upload size={28} color="var(--color-primary)" />
                 </div>
                 <div>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {selectedFile ? selectedFile.name : 'Click to browse or drag & drop CSV file'}
+                  <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    {selectedFile ? selectedFile.name : 'Click to select or drag & drop CSV file'}
                   </p>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                    {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'Supports multi-day, multi-agent monitoring check CSVs'}
+                    {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'Supports health-check monitoring logs CSV'}
                   </span>
                 </div>
               </div>
@@ -295,47 +272,12 @@ export default function CsvUploadModal({ isOpen, onClose, onUploadSuccess, onSel
                 className="btn btn-primary"
                 onClick={handleUploadSubmit}
                 disabled={uploading}
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '12px' }}
               >
                 <Upload size={16} />
-                <span>{uploading ? 'Processing in Serverless Cloud Function...' : `Process ${selectedFile.name}`}</span>
+                <span>{uploading ? 'Uploading & Processing in Cloud Function...' : `Upload & Process ${selectedFile.name}`}</span>
               </button>
             )}
-
-            {/* Quick Preset Datasets Divider */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '4px 0' }}>
-              <div style={{ height: '1px', flex: 1, background: 'var(--border-subtle)' }} />
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Or test with sample datasets
-              </span>
-              <div style={{ height: '1px', flex: 1, background: 'var(--border-subtle)' }} />
-            </div>
-
-            {/* Preset Buttons Grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: '8px'
-            }}>
-              {PRESET_FILES.map((p) => (
-                <button
-                  key={p.id}
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handlePresetSelect(p.id)}
-                  disabled={uploading}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    padding: '8px 10px',
-                    textAlign: 'left'
-                  }}
-                >
-                  <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{p.label}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{p.seed} • {p.days}</span>
-                </button>
-              ))}
-            </div>
           </div>
         )}
       </div>
