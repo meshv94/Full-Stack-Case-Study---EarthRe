@@ -10,29 +10,29 @@ A production-grade SLA Monitoring Dashboard and automated data-cleaning pipeline
 
 ```mermaid
 flowchart LR
-    subgraph Frontend [Client Layer]
-        UI[Single-Screen React + Vite Dashboard\nHosted on Vercel CDN]
+    subgraph Frontend ["Client Layer"]
+        UI["Single-Screen React + Vite Dashboard<br/>Hosted on Vercel CDN"]
     end
 
-    subgraph Serverless [Stateless Compute Layer]
-        API[Vercel Serverless Function\n/api/upload on AWS Lambda\n(Node.js)]
-        Parser[CSV Parser]
-        Cleaner[Data Cleaner & Normalizer]
-        SLACalc[SLA & Stats Engine]
+    subgraph Serverless ["Stateless Compute Layer"]
+        API["Vercel Serverless Function<br/>/api/upload on AWS Lambda (Node.js)"]
+        Parser["CSV Parser"]
+        Cleaner["Data Cleaner & Normalizer"]
+        SLACalc["SLA & Stats Engine"]
     end
 
-    subgraph Persistence [Database Layer]
-        Mongo[(MongoDB Atlas M0 Database\nFree Tier Cluster)]
-        UploadsCol[(uploads collection\nAggregates & SLA Stats)]
-        ChecksCol[(monitoringChecks collection\nIndexed Checks)]
+    subgraph Persistence ["Database Layer"]
+        Mongo[("MongoDB Atlas M0 Database<br/>Free Tier Cluster")]
+        UploadsCol[("uploads collection<br/>Aggregates & SLA Stats")]
+        ChecksCol[("monitoringChecks collection<br/>Indexed Checks")]
     end
 
-    UI -->|POST /api/upload| API
+    UI -->|"POST /api/upload"| API
     API --> Parser --> Cleaner --> SLACalc
-    SLACalc -->|insertMany batch| Mongo
+    SLACalc -->|"insertMany batch"| Mongo
     Mongo --> UploadsCol
     Mongo --> ChecksCol
-    UI -->|GET /api/stats & GET /api/logs| API
+    UI -->|"GET /api/stats & GET /api/logs"| API
 ```
 
 ### Architectural Decisions & Rationale
