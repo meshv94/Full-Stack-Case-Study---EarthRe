@@ -1,5 +1,7 @@
 # SLA Monitoring Dashboard — Vercel + MongoDB Atlas
 
+> **Live Deployed Application:** [https://full-stack-case-study-earthre.vercel.app/](https://full-stack-case-study-earthre.vercel.app/)
+
 A production-grade SLA Monitoring Dashboard and automated data-cleaning pipeline built with **React + Vite**, **Vercel Stateless Serverless Functions**, and **MongoDB Atlas** to turn raw, messy multi-agent cloud health logs into trustworthy SLA compliance metrics and actionable operational insights.
 
 ---
@@ -90,7 +92,10 @@ Through automated data auditing across all provided datasets (`9d`, `12d`, `14d`
 
 ---
 
-## 4. Local Development & Deployment Guide
+## 4. Live URL & Local Development Guide
+
+- **Live URL:** [https://full-stack-case-study-earthre.vercel.app/](https://full-stack-case-study-earthre.vercel.app/)
+- **Last Verified Live:** September 2026
 
 ### Prerequisites
 - Node.js >= 18.x
